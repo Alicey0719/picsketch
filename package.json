@@ -1,0 +1,26 @@
+{
+    "name": "picsketch",
+    "private": true,
+    "version": "0.0.1",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "vue-tsc && vite build",
+        "preview": "vite preview"
+    },
+    "dependencies": {
+        "heic2any": "^0.0.4",
+        "libheif-js": "^1.19.8",
+        "perfect-freehand": "^1.2.2",
+        "vue": "^3.4.0"
+    },
+    "devDependencies": {
+        "@vitejs/plugin-vue": "^5.2.4",
+        "autoprefixer": "^10.4.24",
+        "postcss": "^8.5.6",
+        "tailwindcss": "^3.4.19",
+        "typescript": "^5.9.3",
+        "vite": "^6.4.1",
+        "vue-tsc": "^2.2.12"
+    }
+}
