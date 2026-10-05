@@ -194,13 +194,32 @@ const hasImage = computed(() => image.value !== null);
 </script>
 
 <template>
-    <div class="p-4 md:p-6 max-w-6xl mx-auto font-sans text-gray-800">
-        <header class="flex justify-between items-center mb-5">
-            <div>
-                <h1 class="text-2xl font-bold text-brand-600">picsketch</h1>
-                <p class="text-xs text-gray-500 mt-0.5">画像にちょこっと注釈・落書き</p>
+    <!-- 画面全体を縦フレックスで使い切る。キャンバスはflex-1で空きを総取り。 -->
+    <div class="h-screen flex flex-col font-sans text-gray-800 bg-gray-50">
+        <header class="shrink-0 flex items-center justify-between px-4 py-2 border-b bg-white">
+            <div class="flex items-baseline gap-3">
+                <h1 class="text-xl font-bold text-brand-600 leading-none">picsketch</h1>
+                <p class="text-xs text-gray-500 hidden sm:block">画像にちょこっと注釈・落書き</p>
             </div>
-            <div class="flex items-center gap-3 pr-1">
+            <div class="flex items-center gap-3">
+                <!-- エクスポート: ヘッダー右に。横幅取らず素早くアクセスできる位置。 -->
+                <div class="flex items-center gap-2" :class="{ 'opacity-50 pointer-events-none': !hasImage }">
+                    <button
+                        type="button"
+                        class="bg-gray-700 hover:bg-gray-800 disabled:bg-gray-300 text-white text-sm font-bold py-1.5 px-3 rounded shadow transition"
+                        :disabled="copyState === 'copying'"
+                        @click="copyImage"
+                    >
+                        {{ copyLabel }}
+                    </button>
+                    <button
+                        type="button"
+                        class="bg-brand-500 hover:bg-brand-600 text-white text-sm font-bold py-1.5 px-3 rounded shadow transition"
+                        @click="downloadImage"
+                    >
+                        PNG保存
+                    </button>
+                </div>
                 <a
                     href="https://github.com/Alicey0719/picsketch"
                     target="_blank"
@@ -224,9 +243,10 @@ const hasImage = computed(() => image.value !== null);
             @change="onFileInputChange"
         />
 
-        <div class="grid grid-cols-1 lg:grid-cols-[180px_1fr_240px] gap-4 lg:gap-6">
+        <!-- 本体: 3カラム。min-h-0を忘れずに（flex子要素のoverflow制御に必要）。 -->
+        <div class="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[180px_1fr_240px] gap-3 p-3 overflow-hidden">
             <!-- 左: ツールバー -->
-            <aside class="bg-white p-3 rounded-lg shadow border order-2 lg:order-1">
+            <aside class="bg-white p-3 rounded-lg shadow border order-2 lg:order-1 overflow-y-auto">
                 <Toolbar
                     :tool="toolState.tool"
                     :can-undo="canUndo"
@@ -240,8 +260,8 @@ const hasImage = computed(() => image.value !== null);
                 />
             </aside>
 
-            <!-- 中央: キャンバス -->
-            <main class="order-1 lg:order-2 min-w-0">
+            <!-- 中央: キャンバス（空きを総取り） -->
+            <main class="order-1 lg:order-2 min-w-0 min-h-0 flex">
                 <SketchCanvas
                     :image="image"
                     :width="imageWidth"
@@ -252,28 +272,10 @@ const hasImage = computed(() => image.value !== null);
                     @remove-strokes="replaceStrokes"
                     @load-file="handleLoadFile"
                 />
-                <!-- エクスポートアクション -->
-                <div class="mt-4 flex flex-col sm:flex-row gap-2" :class="{ 'opacity-50 pointer-events-none': !hasImage }">
-                    <button
-                        type="button"
-                        class="flex-1 bg-gray-700 hover:bg-gray-800 disabled:bg-gray-300 text-white font-bold py-3 px-4 rounded shadow transition"
-                        :disabled="copyState === 'copying'"
-                        @click="copyImage"
-                    >
-                        {{ copyLabel }}
-                    </button>
-                    <button
-                        type="button"
-                        class="flex-1 bg-brand-500 hover:bg-brand-600 text-white font-bold py-3 px-4 rounded shadow transition"
-                        @click="downloadImage"
-                    >
-                        PNGでダウンロード
-                    </button>
-                </div>
             </main>
 
             <!-- 右: プロパティ -->
-            <aside class="bg-white p-3 rounded-lg shadow border order-3" :class="{ 'opacity-50 pointer-events-none select-none': !hasImage }">
+            <aside class="bg-white p-3 rounded-lg shadow border order-3 overflow-y-auto" :class="{ 'opacity-50 pointer-events-none select-none': !hasImage }">
                 <PropertiesPanel :tool-state="toolState" @update="updateTool" />
             </aside>
         </div>

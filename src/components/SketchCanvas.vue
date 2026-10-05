@@ -23,6 +23,25 @@ const containerRef = ref<HTMLDivElement | null>(null);
 const baseCanvasRef = ref<HTMLCanvasElement | null>(null);
 const liveCanvasRef = ref<HTMLCanvasElement | null>(null);
 
+// 親からもらった幅・高さに合わせて、画像のアスペクト比を保ったままcontain表示する。
+// ResizeObserverで親の寸法を測り、CSS上の表示サイズをJSで決定する（CSSのaspect-ratio+max-h/wは組み合わせが不安定なため）。
+const containerSize = ref({ w: 0, h: 0 });
+let resizeObserver: ResizeObserver | null = null;
+
+const fittedStyle = computed(() => {
+    if (!props.image || containerSize.value.w === 0 || containerSize.value.h === 0 || props.width === 0) {
+        return { width: '100%', height: '100%' };
+    }
+    const scale = Math.min(
+        containerSize.value.w / props.width,
+        containerSize.value.h / props.height,
+    );
+    return {
+        width: `${Math.floor(props.width * scale)}px`,
+        height: `${Math.floor(props.height * scale)}px`,
+    };
+});
+
 const isDragging = ref(false);
 const isDrawing = ref(false);
 const currentPoints = ref<Point[]>([]);
@@ -63,10 +82,24 @@ watch(
 onMounted(() => {
     redrawBase();
     window.addEventListener('paste', onPaste);
+    if (containerRef.value) {
+        // 初期サイズを同期的に取得して、初回描画でcanvasが引き伸ばされる1フレームを避ける。
+        const rect = containerRef.value.getBoundingClientRect();
+        containerSize.value = { w: rect.width, h: rect.height };
+        resizeObserver = new ResizeObserver((entries) => {
+            for (const entry of entries) {
+                const { width, height } = entry.contentRect;
+                containerSize.value = { w: width, h: height };
+            }
+        });
+        resizeObserver.observe(containerRef.value);
+    }
 });
 
 onBeforeUnmount(() => {
     window.removeEventListener('paste', onPaste);
+    resizeObserver?.disconnect();
+    resizeObserver = null;
 });
 
 // --- 座標変換 ---
@@ -410,62 +443,64 @@ defineExpose({ loadImageFromFile });
 <template>
     <div
         ref="containerRef"
-        class="relative mx-auto bg-gray-50 rounded-lg shadow-inner overflow-hidden"
+        class="relative w-full h-full bg-gray-50 rounded-lg shadow-inner overflow-hidden flex items-center justify-center"
         :class="{ 'ring-2 ring-brand-500': isDragging }"
-        :style="image ? { aspectRatio: `${width}/${height}`, maxHeight: '70vh' } : { minHeight: '360px' }"
         @dragover="onDragOver"
         @dragleave="onDragLeave"
         @drop="onDrop"
     >
         <template v-if="image">
-            <canvas
-                ref="baseCanvasRef"
-                :width="width"
-                :height="height"
-                class="block w-full h-full absolute inset-0 pointer-events-none"
-            />
-            <canvas
-                ref="liveCanvasRef"
-                :width="width"
-                :height="height"
-                class="block w-full h-full absolute inset-0 touch-none"
-                :style="{ cursor: toolState.tool === 'text' ? 'text' : 'crosshair' }"
-                @pointerdown="onPointerDown"
-                @pointermove="onPointerMove"
-                @pointerup="onPointerUp"
-                @pointercancel="onPointerUp"
-            />
-            <!-- テキスト入力オーバーレイ -->
-            <div v-if="textEditPos" class="absolute z-10" :style="textEditCssStyle">
-                <textarea
-                    ref="textAreaRef"
-                    v-model="textEditValue"
-                    rows="1"
-                    class="min-w-[80px] bg-white/90 border-2 border-brand-500 rounded px-1 py-0.5 shadow font-sans resize focus:outline-none"
-                    :style="{ fontSize: 'inherit', color: 'inherit' }"
-                    placeholder="テキスト..."
-                    @keydown="onTextKeyDown"
+            <!-- 画像のアスペクト比を保ったままcontainフィットするラッパ。中身canvasはこれに追従。 -->
+            <div class="relative" :style="fittedStyle">
+                <canvas
+                    ref="baseCanvasRef"
+                    :width="width"
+                    :height="height"
+                    class="block w-full h-full absolute inset-0 pointer-events-none"
                 />
-                <div class="mt-1 flex gap-1">
-                    <button
-                        type="button"
-                        class="text-xs bg-brand-500 text-white px-2 py-0.5 rounded hover:bg-brand-600"
-                        @click="commitText"
-                    >
-                        確定 (⌘Enter)
-                    </button>
-                    <button
-                        type="button"
-                        class="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded hover:bg-gray-300"
-                        @click="cancelText"
-                    >
-                        キャンセル
-                    </button>
+                <canvas
+                    ref="liveCanvasRef"
+                    :width="width"
+                    :height="height"
+                    class="block w-full h-full absolute inset-0 touch-none"
+                    :style="{ cursor: toolState.tool === 'text' ? 'text' : 'crosshair' }"
+                    @pointerdown="onPointerDown"
+                    @pointermove="onPointerMove"
+                    @pointerup="onPointerUp"
+                    @pointercancel="onPointerUp"
+                />
+                <!-- テキスト入力オーバーレイ -->
+                <div v-if="textEditPos" class="absolute z-10" :style="textEditCssStyle">
+                    <textarea
+                        ref="textAreaRef"
+                        v-model="textEditValue"
+                        rows="1"
+                        class="min-w-[80px] bg-white/90 border-2 border-brand-500 rounded px-1 py-0.5 shadow font-sans resize focus:outline-none"
+                        :style="{ fontSize: 'inherit', color: 'inherit' }"
+                        placeholder="テキスト..."
+                        @keydown="onTextKeyDown"
+                    />
+                    <div class="mt-1 flex gap-1">
+                        <button
+                            type="button"
+                            class="text-xs bg-brand-500 text-white px-2 py-0.5 rounded hover:bg-brand-600"
+                            @click="commitText"
+                        >
+                            確定 (⌘Enter)
+                        </button>
+                        <button
+                            type="button"
+                            class="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded hover:bg-gray-300"
+                            @click="cancelText"
+                        >
+                            キャンセル
+                        </button>
+                    </div>
                 </div>
             </div>
         </template>
         <template v-else>
-            <div class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 p-10 text-center">
+            <div class="flex flex-col items-center justify-center text-gray-400 p-10 text-center">
                 <svg class="w-16 h-16 mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                     <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
